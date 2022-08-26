@@ -1,6 +1,6 @@
 use crate::Bench;
-use egg::*;
 use egg::rewrite as rw;
+use egg::*;
 use num_rational::BigRational;
 use std::default::*;
 use std::*;
@@ -19,45 +19,53 @@ pub mod ac {
     type Rewrite = egg::Rewrite<Math, ()>;
 
     #[derive(Default)]
-    pub struct AC;
+    pub struct AC {
+        num_iter: usize,
+        expr_size: usize,
+    }
 
-    pub fn new() -> AC {
-        AC
+    pub fn new(num_iter: usize, expr_size: usize) -> AC {
+        AC {
+            num_iter,
+            expr_size,
+        }
     }
 
     impl AC {
-
         fn rewrites(&self) -> Vec<Rewrite> {
-            vec![        
+            vec![
                 rw!("comm-add"; "(+ ?a ?b)" => "(+ ?b ?a)"),
                 rw!("assoc-add"; "(+ ?a (+ ?b ?c))" => "(+ (+ ?a ?b) ?c)"),
             ]
         }
 
-        fn egglog_text(&self) -> &str {
-            &"
-            (datatype Math
-              (Var i64)
-              (Add Math Math)
+        fn egglog_text(&self) -> String {
+            format!(
+                "
+                (datatype Math
+                  (Var i64)
+                  (Add Math Math)
+                )
+                
+                (define start (Add (Var 1) (Add (Var 2) (Add (Var 3) (Add (Var 4) 
+                              (Add (Var 5) (Add (Var 6) (Add (Var 7) (Var 8)))))))))
+                
+                (rewrite (Add x y) (Add y x))
+                (rewrite (Add x (Add y z)) (Add (Add x y) z))
+                
+                (run {})
+                
+                (define end (Add (Var 8) (Add (Var 7) (Add (Var 6) (Add (Var 5) 
+                            (Add (Var 4) (Add (Var 3) (Add (Var 2) (Var 1)))))))))
+                (check (= start end))",
+                self.num_iter
             )
-            
-            (define start (Add (Var 1) (Add (Var 2) (Add (Var 3) (Add (Var 4) 
-                          (Add (Var 5) (Add (Var 6) (Add (Var 7) (Var 8)))))))))
-            
-            (rewrite (Add x y) (Add y x))
-            (rewrite (Add x (Add y z)) (Add (Add x y) z))
-            
-            (run 8)
-            
-            (define end (Add (Var 8) (Add (Var 7) (Add (Var 6) (Add (Var 5) 
-                        (Add (Var 4) (Add (Var 3) (Add (Var 2) (Var 1)))))))))
-            (check (= start end))"
         }
     }
 
     impl Bench for AC {
         fn name(&self) -> std::string::String {
-            "assoc-comm".into()
+            format!("assoc-comm-{}-{})", self.num_iter, self.expr_size).into()
         }
         fn run_egg(&self) {
             let start_expr = "(+ 1 (+ 2 (+ 3 (+ 4 (+ 5 (+ 6 (+ 7 8)))))))"
@@ -67,7 +75,7 @@ pub mod ac {
                 .parse()
                 .unwrap();
             let runner = Runner::default()
-                .with_iter_limit(8)
+                .with_iter_limit(self.num_iter)
                 .with_scheduler(SimpleScheduler)
                 .with_expr(&start_expr)
                 .run(&self.rewrites());
@@ -77,7 +85,7 @@ pub mod ac {
 
         fn run_egglog(&self) {
             let mut egraph = egg_smol::EGraph::default();
-            let result = egraph.parse_and_run_program(self.egglog_text());
+            let result = egraph.parse_and_run_program(&self.egglog_text());
             assert!(result.is_ok());
         }
     }

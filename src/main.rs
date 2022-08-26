@@ -37,7 +37,7 @@ impl BenchRunner {
     }
 }
 fn benches() -> Vec<Box<dyn Bench>> {
-    vec![Box::new(math::ac::new())]
+    vec![Box::new(math::ac::new(8, 8)), Box::new(math::ac::new(7, 8)), Box::new(math::ac::new(6, 8))]
 }
 fn main() {
     BenchRunner::default().run(&benches());
