@@ -1,0 +1,16 @@
+(datatype Math
+    (Var i64)
+    (Add Math Math)
+)
+
+(define start (Add (Var 1) (Add (Var 2) (Add (Var 3) (Add (Var 4) (Add (Var 5) 
+              (Add (Var 6) (Add (Var 7) (Add (Var 8) (Add (Var 9) (Var 10)))))))))))
+
+(rewrite (Add x y) (Add y x))
+(rewrite (Add x (Add y z)) (Add (Add x y) z))
+
+(run 10)
+
+(define end (Add (Var 10) (Add (Var 9) (Add (Var 8) (Add (Var 7) (Add (Var 6)
+            (Add (Var 5) (Add (Var 4) (Add (Var 3) (Add (Var 2) (Var 1)))))))))))
+(check (= start end))

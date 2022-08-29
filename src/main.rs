@@ -1,9 +1,33 @@
+use std::fs::*;
+use std::io::Read;
 use std::time;
 
 trait Bench {
-    fn name(&self) -> String;
+    fn name(&self) -> &str;
     fn run_egg(&self);
-    fn run_egglog(&self);
+    fn egglog_text(&self) -> Option<String> {
+        let mut text = String::default();
+        File::open(format!("benchmarks/{}.egg", self.name()))
+            .ok()?
+            .read_to_string(&mut text)
+            .ok()?;
+        Some(text)
+    }
+    fn run_egglog(&self) {
+        let mut egraph = egg_smol::EGraph::default();
+        egraph.parse_and_run_program(&self.egglog_text().unwrap()).unwrap();
+    }
+}
+
+struct BenchRecord {
+    benchmark: String,
+    node_size: usize,
+    class_size: usize,
+    algo: String,
+    pattern: String,
+    time: String,
+    result_size: usize,
+    repeat_time: usize,
 }
 
 mod math;
@@ -16,10 +40,10 @@ impl BenchRunner {
         for bench in benches {
             let (d1, d2) = self.run_one(bench);
             println!(
-                "On benchmark {:?}, egglog spent {:?} and egg spent {:?}, egglog/egg: {:?}",
+                "On benchmark {:?}, egglog spent {:.3} and egg spent {:.3}, egglog/egg: {:?}",
                 bench.name(),
-                d2.as_micros(),
-                d1.as_micros(),
+                d2.as_secs_f64(),
+                d1.as_secs_f64(),
                 d2.as_secs_f64() / d1.as_secs_f64()
             )
         }
@@ -37,7 +61,9 @@ impl BenchRunner {
     }
 }
 fn benches() -> Vec<Box<dyn Bench>> {
-    vec![Box::new(math::ac::new(8, 8)), Box::new(math::ac::new(7, 8)), Box::new(math::ac::new(6, 8))]
+    vec![
+        Box::new(math::ac::new()),
+    ]
 }
 fn main() {
     BenchRunner::default().run(&benches());
