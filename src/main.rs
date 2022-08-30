@@ -21,13 +21,14 @@ trait Bench {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 enum Engine {
     Egg,
     Egglog,
 }
+use serde::Serialize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 struct BenchRecord {
     benchmark: String,
     engine: Engine,
