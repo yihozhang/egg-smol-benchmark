@@ -21,10 +21,7 @@ trait Bench {
 
 struct BenchRecord {
     benchmark: String,
-    node_size: usize,
-    class_size: usize,
     algo: String,
-    pattern: String,
     time: String,
     result_size: usize,
     repeat_time: usize,

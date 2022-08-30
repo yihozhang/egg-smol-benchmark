@@ -58,7 +58,8 @@ pub mod ac {
                 .with_expr(&start_expr)
                 .run(&self.rewrites());
             let egraph = &runner.egraph;
-            assert!(egraph.equivs(&start_expr, &end_expr).len() == 1);
+            // assert!(egraph.equivs(&start_expr, &end_expr).len() == 1);
+            assert!(egraph.lookup_expr(&start_expr) == egraph.lookup_expr(&end_expr));
         }
     }
 }
