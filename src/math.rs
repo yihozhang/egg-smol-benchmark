@@ -56,7 +56,10 @@ pub mod ac {
                 .with_iter_limit(self.num_iter)
                 .with_scheduler(SimpleScheduler)
                 .with_expr(&start_expr)
+                .with_node_limit(usize::MAX)
+                .with_time_limit(time::Duration::MAX)
                 .run(&self.rewrites());
+            assert_eq!(runner.iterations.len(), self.num_iter);
             let egraph = &runner.egraph;
             // assert!(egraph.equivs(&start_expr, &end_expr).len() == 1);
             assert!(egraph.lookup_expr(&start_expr) == egraph.lookup_expr(&end_expr));
