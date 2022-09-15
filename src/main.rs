@@ -2,16 +2,20 @@ use std::fs::*;
 use std::io::Read;
 use std::time;
 
+pub fn get_text(name: &str) -> Option<String> {
+    let mut text = String::default();
+    File::open(format!("src/egglog/{}.egg", name))
+        .ok()?
+        .read_to_string(&mut text)
+        .ok()?;
+    Some(text)
+}
+
 trait Bench {
     fn name(&self) -> &str;
     fn run_egg(&self);
     fn egglog_text(&self) -> Option<String> {
-        let mut text = String::default();
-        File::open(format!("benchmarks/{}.egg", self.name()))
-            .ok()?
-            .read_to_string(&mut text)
-            .ok()?;
-        Some(text)
+        get_text(self.name())
     }
     fn run_egglog(&self) {
         let mut egraph = egg_smol::EGraph::default();
@@ -80,8 +84,13 @@ impl BenchRunner {
     }
 }
 fn benches() -> Vec<Box<dyn Bench>> {
-    vec![Box::new(math::ac::new())]
+    vec![
+        Box::new(math::ac::new()),
+        Box::new(math::simplify_root::new()),
+        Box::new(math::simplify_factor::new())
+    ]
 }
 fn main() {
+    env_logger::init();
     BenchRunner::default().run(&benches());
 }
