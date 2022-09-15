@@ -33,7 +33,8 @@ fn run_and_check<L: Language + FromOp + 'static, N: Analysis<L>>(
     assert!(egraph.lookup_expr(&s) == egraph.lookup_expr(&e));
 
     let report = runner.report();
-    log::warn!("{}", report);
+    log::info!("===== egg =====");
+    log::info!("{}", report);
     runner
 }
 

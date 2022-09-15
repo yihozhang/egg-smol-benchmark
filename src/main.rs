@@ -19,9 +19,26 @@ trait Bench {
     }
     fn run_egglog(&self) {
         let mut egraph = egg_smol::EGraph::default();
-        egraph
+        let msgs = egraph
             .parse_and_run_program(&self.egglog_text().unwrap())
             .unwrap();
+        log::info!("===== egglog =====");
+        let mut report = None;
+        for msg in msgs.iter().rev() {
+            if msg.starts_with("Ran ") {
+                if report.is_none() {
+                    report = Some(msg);
+                    break;
+                } else{
+                    log::error!("multiple egglog performance report for {}", self.name());
+                }
+            }
+        }
+        if let Some(report) = report {
+            log::info!("{}", report);
+        } else {
+            log::info!("No egglog performance report for {}", self.name());
+        }
     }
 }
 
