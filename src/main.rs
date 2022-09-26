@@ -1,6 +1,14 @@
 use std::fs::*;
 use std::io::Read;
 use std::time;
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+#[structopt(name = "egg-smol-benchmarks")]
+pub(crate) struct Opt {
+    #[structopt(short, long)]
+    egg_uses_backoff_scheduler: bool,
+}
 
 pub fn get_text(name: &str) -> Option<String> {
     let mut text = String::default();
@@ -107,6 +115,7 @@ fn benches() -> Vec<Box<dyn Bench>> {
         Box::new(math::simplify_factor::new())
     ]
 }
+
 fn main() {
     env_logger::init();
     BenchRunner::default().run(&benches());

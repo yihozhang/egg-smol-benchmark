@@ -1,8 +1,22 @@
 use crate::Bench;
+use crate::*;
 use egg::rewrite as rw;
 use egg::*;
 use std::default::*;
 use std::*;
+
+pub fn default_runner<L: Language, N: Analysis<L> + Default>() -> Runner<L, N> {
+    let opt = Opt::from_args();
+    let mut runner = Runner::new(N::default())
+        .with_node_limit(usize::MAX)
+        .with_iter_limit(usize::MAX);
+    if opt.egg_uses_backoff_scheduler {
+        runner = runner.with_scheduler(egg::BackoffScheduler::default());
+    } else {
+        runner = runner.with_scheduler(egg::SimpleScheduler);
+    }
+    runner
+}
 
 fn run_and_check<L: Language + FromOp + 'static, N: Analysis<L>>(
     start_expr: &str,
@@ -29,12 +43,13 @@ fn run_and_check<L: Language + FromOp + 'static, N: Analysis<L>>(
     }
     let runner = runner.with_expr(&s).run(&rules);
 
-    let egraph = &runner.egraph;
-    assert!(egraph.lookup_expr(&s) == egraph.lookup_expr(&e));
-
     let report = runner.report();
     log::info!("===== egg =====");
     log::info!("{}", report);
+
+    let egraph = &runner.egraph;
+    assert!(egraph.lookup_expr(&s) == egraph.lookup_expr(&e));
+
     runner
 }
 
@@ -79,7 +94,7 @@ pub mod ac {
 
         fn run_egg(&self) {
             let num_iter = 10;
-            let runner = Runner::default()
+            let runner = default_runner()
                 .with_iter_limit(num_iter)
                 .with_scheduler(SimpleScheduler)
                 .with_node_limit(usize::MAX)
@@ -99,7 +114,7 @@ pub mod ac {
 pub mod math_egg_src {
     use egg::{rewrite as rw, *};
     use num_rational::Rational64;
-    use num_traits::Zero;
+    use num_traits::{Zero, One};
 
     pub type EGraph = egg::EGraph<Math, ConstantFold>;
     pub type Rewrite = egg::Rewrite<Math, ConstantFold>;
@@ -170,7 +185,7 @@ pub mod math_egg_src {
         }
 
         fn modify(egraph: &mut EGraph, id: Id) {
-            let class = egraph[id].clone();
+            let class = &egraph[id];
             if let Some(c) = class.data {
                 let added = egraph.add(Math::Constant(c));
                 egraph.union(id, added);
@@ -213,11 +228,35 @@ pub mod math_egg_src {
         }
     }
 
+    // NOTE: This is different from the test suite, 
+    // because we are doing a sound is_not_zero analysis here
     fn is_not_zero(var: &str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
         let var = var.parse().unwrap();
         move |egraph, _, subst| {
             if let Some(n) = &egraph[subst[var]].data {
                 !n.is_zero()
+            } else {
+                false
+            }
+        }
+    }
+
+    fn is_not_zero_soft(var: &str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
+        let var = var.parse().unwrap();
+        move |egraph, _, subst| {
+            if let Some(n) = &egraph[subst[var]].data {
+                !n.is_zero()
+            } else {
+                true
+            }
+        }
+    }
+
+    fn is_not_one_soft(var: &str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
+        let var = var.parse().unwrap();
+        move |egraph, _, subst| {
+            if let Some(n) = &egraph[subst[var]].data {
+                !n.is_one()
             } else {
                 true
             }
@@ -237,8 +276,10 @@ pub mod math_egg_src {
             rw!("zero-add"; "(+ ?a 0)" => "?a"),
             rw!("zero-mul"; "(* ?a 0)" => "0"),
             rw!("one-mul";  "(* ?a 1)" => "?a"),
-            rw!("add-zero"; "?a" => "(+ ?a 0)"),
-            rw!("mul-one";  "?a" => "(* ?a 1)"),
+            // The two rules below are different from the egg test suite.
+            // This is because the two rules will explode under simple scheduler.
+            rw!("add-zero"; "?a" => "(+ ?a 0)" if is_not_zero_soft("?a")),
+            rw!("mul-one";  "?a" => "(* ?a 1)" if is_not_one_soft("?a")),
             rw!("cancel-sub"; "(- ?a ?a)" => "0"),
             rw!("cancel-div"; "(/ ?a ?a)" => "1" if is_not_zero("?a")),
             rw!("distribute"; "(* ?a (+ ?b ?c))"        => "(+ (* ?a ?b) (* ?a ?c))"),
@@ -303,15 +344,14 @@ pub mod simplify_root {
                         (/ (- 1 (sqrt five))
                             2)))";
             let end_expr = &"(/ 1 (sqrt five))";
-            let node_limit = 2_500;
-            let runner = run_and_check(
+            let _runner = run_and_check(
                 start_expr,
                 end_expr,
-                Runner::default().with_node_limit(node_limit),
+                default_runner(),
                 rules(),
                 true,
             );
-            assert!(matches!(runner.stop_reason, Some(StopReason::NodeLimit(_))));
+            // assert!(matches!(runner.stop_reason, Some(StopReason::NodeLimit(_))));
         }
 
         fn egglog_text(&self) -> Option<String> {
@@ -349,13 +389,13 @@ pub mod simplify_factor {
 
     impl Bench for SimplifyFactor {
         fn name(&self) -> &str {
-            &"math_simplify_root"
+            &"math_simplify_factor"
         }
 
         fn run_egg(&self) {
             let start_expr = &"(* (+ x 3) (+ x 1))";
             let end_expr = &"(+ (+ (* x x) (* 4 x)) 3)";
-            let _runner = run_and_check(start_expr, end_expr, Runner::default(), rules(), true);
+            let _runner = run_and_check(start_expr, end_expr, default_runner(), rules(), true);
         }
 
         fn egglog_text(&self) -> Option<String> {
