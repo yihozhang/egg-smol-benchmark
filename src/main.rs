@@ -8,6 +8,10 @@ use structopt::StructOpt;
 pub(crate) struct Opt {
     #[structopt(short, long)]
     egg_uses_backoff_scheduler: bool,
+    #[structopt(short, long)]
+    disable_egg: bool,
+    #[structopt(short, long)]
+    disable_egglog: bool,
 }
 
 pub fn get_text(name: &str) -> Option<String> {
@@ -79,33 +83,43 @@ impl BenchRunner {
     }
 
     pub fn run_one(&self, bench: &Box<dyn Bench>) -> Vec<BenchRecord> {
-        let egg_start_time = time::Instant::now();
-        bench.run_egg();
-        let egg_duration = time::Instant::now() - egg_start_time;
-        let record1 = BenchRecord {
-            benchmark: bench.name().to_string(),
-            engine: Engine::Egg,
-            time: egg_duration.as_nanos().to_string(),
-        };
+        let opt = Opt::from_args();
+        let mut egg_duration = None;
+        let mut egglog_duration = None;
+        let mut records = vec![];
+        if !opt.disable_egg {
+            let egg_start_time = time::Instant::now();
+            bench.run_egg();
+            egg_duration = Some(time::Instant::now() - egg_start_time);
+            records.push(BenchRecord {
+                benchmark: bench.name().to_string(),
+                engine: Engine::Egg,
+                time: egg_duration.unwrap().as_nanos().to_string(),
+            });
+        }
 
-        let egglog_start_time = time::Instant::now();
-        bench.run_egglog();
-        let egglog_duration = time::Instant::now() - egglog_start_time;
-        let record2 = BenchRecord {
-            benchmark: bench.name().to_string(),
-            engine: Engine::Egglog,
-            time: egg_duration.as_nanos().to_string(),
-        };
+        if !opt.disable_egglog {
+            let egglog_start_time = time::Instant::now();
+            bench.run_egglog();
+            egglog_duration = Some(time::Instant::now() - egglog_start_time);
+            records.push(BenchRecord {
+                benchmark: bench.name().to_string(),
+                engine: Engine::Egglog,
+                time: egglog_duration.unwrap().as_nanos().to_string(),
+            });
+        }
 
-        println!(
-            "On benchmark {:?}, egglog spent {:.3}s and egg spent {:.3}s, egglog/egg: {:?}",
-            bench.name(),
-            egglog_duration.as_secs_f64(),
-            egg_duration.as_secs_f64(),
-            egglog_duration.as_secs_f64() / egg_duration.as_secs_f64()
-        );
+        if !opt.disable_egg && !opt.disable_egglog {
+            println!(
+                "On benchmark {:?}, egglog spent {:.3}s and egg spent {:.3}s, egglog/egg: {:?}",
+                bench.name(),
+                egglog_duration.unwrap().as_secs_f64(),
+                egg_duration.unwrap().as_secs_f64(),
+                egglog_duration.unwrap().as_secs_f64() / egg_duration.unwrap().as_secs_f64()
+            );
+        }
 
-        vec![record1, record2]
+        records
     }
 }
 fn benches() -> Vec<Box<dyn Bench>> {

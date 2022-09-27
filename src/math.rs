@@ -142,23 +142,23 @@ pub mod math_egg_src {
         }
     }
 
-    // You could use egg::AstSize, but this is useful for debugging, since
-    // it will really try to get rid of the Diff operator
-    pub struct MathCostFn;
-    impl egg::CostFunction<Math> for MathCostFn {
-        type Cost = usize;
-        fn cost<C>(&mut self, enode: &Math, mut costs: C) -> Self::Cost
-        where
-            C: FnMut(Id) -> Self::Cost,
-        {
-            let op_cost = match enode {
-                Math::Diff(..) => 100,
-                Math::Integral(..) => 100,
-                _ => 1,
-            };
-            enode.fold(op_cost, |sum, i| sum + costs(i))
-        }
-    }
+    // // You could use egg::AstSize, but this is useful for debugging, since
+    // // it will really try to get rid of the Diff operator
+    // pub struct MathCostFn;
+    // impl egg::CostFunction<Math> for MathCostFn {
+    //     type Cost = usize;
+    //     fn cost<C>(&mut self, enode: &Math, mut costs: C) -> Self::Cost
+    //     where
+    //         C: FnMut(Id) -> Self::Cost,
+    //     {
+    //         let op_cost = match enode {
+    //             Math::Diff(..) => 100,
+    //             Math::Integral(..) => 100,
+    //             _ => 1,
+    //         };
+    //         enode.fold(op_cost, |sum, i| sum + costs(i))
+    //     }
+    // }
 
     #[derive(Default)]
     pub struct ConstantFold;
@@ -172,7 +172,9 @@ pub mod math_egg_src {
                 Math::Add([a, b]) => x(a)? + x(b)?,
                 Math::Sub([a, b]) => x(a)? - x(b)?,
                 Math::Mul([a, b]) => x(a)? * x(b)?,
-                Math::Div([a, b]) if x(b) != Some(&Rational64::zero()) => x(a)? / x(b)?,
+                // This part differs from math.rs, which is unsound here.
+                Math::Div([a, b]) if x(b).map_or(false, |b| !b.is_zero()) => x(a)? / x(b)?,
+                // Math::Div([a, b]) if x(b) != Some(&Rational64::zero()) => x(a)? / x(b)?,
                 _ => return None,
             })
         }
@@ -193,9 +195,6 @@ pub mod math_egg_src {
                 // Note: we don't to prune because it's generally bad
                 // and even worse in egglog
                 // egraph[id].nodes.retain(|n| n.is_leaf());
-
-                #[cfg(debug_assertions)]
-                egraph[id].assert_unique_leaves();
             }
         }
     }
@@ -244,10 +243,12 @@ pub mod math_egg_src {
     fn is_not_zero_soft(var: &str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
         let var = var.parse().unwrap();
         move |egraph, _, subst| {
-            if let Some(n) = &egraph[subst[var]].data {
-                !n.is_zero()
+            if let Some(id) = egraph.lookup_expr(&"0".parse().unwrap()) {
+                id != subst[var]
             } else {
-                true
+                // if 0 is not in the database, we don't fire
+                // this is weird but actually works
+                false
             }
         }
     }
@@ -255,10 +256,12 @@ pub mod math_egg_src {
     fn is_not_one_soft(var: &str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
         let var = var.parse().unwrap();
         move |egraph, _, subst| {
-            if let Some(n) = &egraph[subst[var]].data {
-                !n.is_one()
+            if let Some(id) = egraph.lookup_expr(&"1".parse().unwrap()) {
+                id != subst[var]
             } else {
-                true
+                // if 1 is not in the database, we don't fire
+                // this is weird but actually works
+                false
             }
         }
     }
