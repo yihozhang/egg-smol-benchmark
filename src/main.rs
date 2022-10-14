@@ -24,13 +24,12 @@ pub fn get_text(name: &str) -> Option<String> {
 }
 
 trait Bench {
-    fn name(&self) -> &str;
+    fn name(&self) -> String;
     fn run_egg(&self);
     fn egglog_text(&self) -> Option<String> {
-        get_text(self.name())
+        get_text(&self.name())
     }
-    fn run_egglog(&self) {
-        let mut egraph = egg_smol::EGraph::default();
+    fn run_egglog_with_engine(&self, mut egraph: egg_smol::EGraph) {
         let msgs = egraph
             .parse_and_run_program(&self.egglog_text().unwrap())
             .unwrap();
@@ -51,6 +50,10 @@ trait Bench {
         } else {
             log::info!("No egglog performance report for {}", self.name());
         }
+    }
+    fn run_egglog(&self) {
+        let egraph = egg_smol::EGraph::default();
+        self.run_egglog_with_engine(egraph);
     }
 }
 
@@ -124,9 +127,10 @@ impl BenchRunner {
 }
 fn benches() -> Vec<Box<dyn Bench>> {
     vec![
-        Box::new(math::ac::new()),
-        Box::new(math::simplify_root::new()),
-        Box::new(math::simplify_factor::new())
+        // Box::new(math::ac::new()),
+        // Box::new(math::simplify_root::new()),
+        // Box::new(math::simplify_factor::new())
+        Box::new(math::run_n::new(30)),
     ]
 }
 

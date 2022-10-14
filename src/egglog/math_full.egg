@@ -64,7 +64,7 @@
        (= v (Var vv))
        (= w (Var vw))
        (!= vv vw))
-      (is-const-or-distinct-var v w))
+      ((is-const-or-distinct-var v w)))
 
 (rewrite (Add a b) (Add b a))
 (rewrite (Mul a b) (Mul b a))
@@ -99,7 +99,10 @@
 (rule ((= e (Diff x c))
        (is-sym x))
       ((is-const-or-distinct-var-demand c x)))
-(rewrite (Diff x c) (Const (rational 0 1)) :when ((is-sym x) (is-const-or-distinct-var c x)))
+(rewrite (Diff x c) (Const (rational 0 1)) 
+      :when 
+            ((is-sym x) 
+             (is-const-or-distinct-var c x)))
 
 (rewrite (Diff x (Add a b)) (Add (Diff x a) (Diff x b)))
 (rewrite (Diff x (Mul a b)) (Add (Mul a (Diff x b)) (Mul b (Diff x a))))

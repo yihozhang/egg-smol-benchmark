@@ -10,11 +10,12 @@ pub fn default_runner<L: Language, N: Analysis<L> + Default>() -> Runner<L, N> {
     let mut runner = Runner::new(N::default())
         .with_node_limit(usize::MAX)
         .with_iter_limit(usize::MAX);
-    if opt.egg_uses_backoff_scheduler {
-        runner = runner.with_scheduler(egg::BackoffScheduler::default());
-    } else {
-        runner = runner.with_scheduler(egg::SimpleScheduler);
-    }
+    runner = runner.with_scheduler(egg::SimpleScheduler);
+    // if opt.egg_uses_backoff_scheduler {
+    //     runner = runner.with_scheduler(egg::BackoffScheduler::default());
+    // } else {
+    //     runner = runner.with_scheduler(egg::SimpleScheduler);
+    // }
     runner
 }
 
@@ -88,8 +89,8 @@ pub mod ac {
     }
 
     impl Bench for AC {
-        fn name(&self) -> &str {
-            &self.name
+        fn name(&self) -> String {
+            self.name.clone()
         }
 
         fn run_egg(&self) {
@@ -114,7 +115,7 @@ pub mod ac {
 pub mod math_egg_src {
     use egg::{rewrite as rw, *};
     use num_rational::Rational64;
-    use num_traits::{Zero, One};
+    use num_traits::{One, Zero};
 
     pub type EGraph = egg::EGraph<Math, ConstantFold>;
     pub type Rewrite = egg::Rewrite<Math, ConstantFold>;
@@ -180,7 +181,7 @@ pub mod math_egg_src {
         }
 
         fn merge(&mut self, to: &mut Self::Data, from: Self::Data) -> DidMerge {
-            merge_option(to, from, |a, b| {
+            egg::merge_option(to, from, |a, b| {
                 assert_eq!(a, &b, "Merged non-equal constants");
                 DidMerge(false, false)
             })
@@ -227,7 +228,7 @@ pub mod math_egg_src {
         }
     }
 
-    // NOTE: This is different from the test suite, 
+    // NOTE: This is different from the test suite,
     // because we are doing a sound is_not_zero analysis here
     fn is_not_zero(var: &str) -> impl Fn(&mut EGraph, Id, &Subst) -> bool {
         let var = var.parse().unwrap();
@@ -335,8 +336,8 @@ pub mod simplify_root {
     pub struct SimplifyRoot {}
 
     impl Bench for SimplifyRoot {
-        fn name(&self) -> &str {
-            &"math_simplify_root"
+        fn name(&self) -> String {
+            "math_simplify_root".into()
         }
 
         fn run_egg(&self) {
@@ -347,14 +348,7 @@ pub mod simplify_root {
                         (/ (- 1 (sqrt five))
                             2)))";
             let end_expr = &"(/ 1 (sqrt five))";
-            let _runner = run_and_check(
-                start_expr,
-                end_expr,
-                default_runner(),
-                rules(),
-                true,
-            );
-            // assert!(matches!(runner.stop_reason, Some(StopReason::NodeLimit(_))));
+            let _runner = run_and_check(start_expr, end_expr, default_runner(), rules(), true);
         }
 
         fn egglog_text(&self) -> Option<String> {
@@ -391,8 +385,8 @@ pub mod simplify_factor {
     pub struct SimplifyFactor {}
 
     impl Bench for SimplifyFactor {
-        fn name(&self) -> &str {
-            &"math_simplify_factor"
+        fn name(&self) -> String {
+            "math_simplify_factor".into()
         }
 
         fn run_egg(&self) {
@@ -415,6 +409,83 @@ pub mod simplify_factor {
             "#,
             );
             Some(src)
+        }
+    }
+}
+
+pub mod run_n {
+    use super::math_egg_src::*;
+    use super::*;
+
+    pub(crate) fn new(n: usize) -> impl Bench {
+        RunN { n }
+    }
+    pub struct RunN {
+        n: usize,
+    }
+
+    impl Bench for RunN {
+        fn name(&self) -> String {
+            format!("math-run-{}", self.n)
+        }
+
+        fn run_egg(&self) {
+            let start_exprs = vec![
+                "(i (ln x) x)",
+                "(i (+ x (cos x)) x)",
+                "(i (* (cos x) x) x)",
+                "(d x (+ 1 (* 2 x)))",
+                "(d x (- (pow x 3) (* 7 (pow x 2))))",
+                "(+ (* y (+ x y)) (- (+ x 2) (+ x x)))",
+                "(/ 1 (- (/ (+ 1 (sqrt five)) 2) (/ (- 1 (sqrt five)) 2)))",
+            ];
+            let mut runner = default_runner();
+            runner = runner
+                .with_scheduler(egg::BackoffScheduler::default())
+                .with_iter_limit(self.n);
+            for start_expr in start_exprs.iter() {
+                runner = runner.with_expr(&start_expr.parse().unwrap());
+            }
+            runner = runner.run(&rules());
+            assert!(matches!(
+                runner.stop_reason,
+                Some(StopReason::IterationLimit(_))
+            ));
+
+            let report = runner.report();
+            log::info!("===== egg =====");
+            log::info!("{}", report);
+        }
+
+        fn egglog_text(&self) -> Option<String> {
+            let mut src = crate::get_text(&"math_full")?;
+            src.push_str(
+                &format!(
+                r#"
+            (Integral (Ln (Var "x")) (Var "x"))
+            (Integral (Add (Var "x") (Cos (Var "x"))) (Var "x"))
+            (Integral (Mul (Cos (Var "x")) (Var "x")) (Var "x"))
+            (Diff (Var "x") (Add (Const (rational 1 1)) (Mul (Const (rational 2 1)) (Var "x"))))
+            (Diff (Var "x") (Sub (Pow (Var "x") (Const (rational 3 1))) (Mul (Const (rational 7 1)) (Pow (Var "x") (Const (rational 2 1))))))
+            (Add (Mul (Var "y") (Add (Var "x") (Var "y"))) (Sub (Add (Var "x") (Const (rational 2 1))) (Add (Var "x") (Var "x"))))
+            (Div (Const (rational 1 1))
+                                    (Sub (Div (Add (Const (rational 1 1))
+                                                (Sqrt (Var "five")))
+                                            (Const (rational 2 1)))
+                                        (Div (Sub (Const (rational 1 1))
+                                                (Sqrt (Var "five")))
+                                            (Const (rational 2 1)))))
+            (run {})
+            "#,
+            self.n
+            ));
+            Some(src)
+        }
+
+        fn run_egglog(&self) {
+            let mut egraph = egg_smol::EGraph::default();
+            egraph.match_limit = 1000;
+            self.run_egglog_with_engine(egraph);
         }
     }
 }
