@@ -1,121 +1,12 @@
-use crate::Bench;
+use crate::Benchmark;
 use crate::*;
-use egg::rewrite as rw;
-use egg::*;
 use std::default::*;
 use std::*;
-
-pub fn default_runner<L: Language, N: Analysis<L> + Default>() -> Runner<L, N> {
-    let opt = Opt::from_args();
-    let mut runner = Runner::new(N::default())
-        .with_node_limit(usize::MAX)
-        .with_iter_limit(usize::MAX);
-    runner = runner.with_scheduler(egg::SimpleScheduler);
-    // if opt.egg_uses_backoff_scheduler {
-    //     runner = runner.with_scheduler(egg::BackoffScheduler::default());
-    // } else {
-    //     runner = runner.with_scheduler(egg::SimpleScheduler);
-    // }
-    runner
-}
-
-fn run_and_check<L: Language + FromOp + 'static, N: Analysis<L>>(
-    start_expr: &str,
-    end_expr: &str,
-    mut runner: Runner<L, N>,
-    rules: Vec<Rewrite<L, N>>,
-    early_check: bool,
-) -> Runner<L, N> {
-    let start_expr: RecExpr<L> = start_expr.parse().unwrap();
-    let s = start_expr.clone();
-
-    let end_expr: RecExpr<L> = end_expr.parse().unwrap();
-    let e = end_expr.clone();
-
-    if early_check {
-        runner = runner.with_hook(move |r| {
-            let egraph = &r.egraph;
-            if egraph.lookup_expr(&start_expr) == egraph.lookup_expr(&end_expr) {
-                Err("Proved all goals".into())
-            } else {
-                Ok(())
-            }
-        });
-    }
-    let runner = runner.with_expr(&s).run(&rules);
-
-    let report = runner.report();
-    log::info!("===== egg =====");
-    log::info!("{}", report);
-
-    let egraph = &runner.egraph;
-    assert!(egraph.lookup_expr(&s) == egraph.lookup_expr(&e));
-
-    runner
-}
-
-pub mod ac {
-    use super::*;
-    use num_rational::Rational64;
-    pub type Constant = Rational64;
-
-    define_language! {
-        pub enum Math {
-            "+" = Add([Id; 2]),
-            Constant(Constant),
-        }
-    }
-    // type EGraph = egg::EGraph<Math, ()>;
-    type Rewrite = egg::Rewrite<Math, ()>;
-
-    #[derive(Default)]
-    pub struct AC {
-        name: String,
-    }
-
-    pub(crate) fn new() -> impl Bench {
-        AC {
-            name: "math_ac_10".into(),
-        }
-    }
-
-    impl AC {
-        fn rewrites(&self) -> Vec<Rewrite> {
-            vec![
-                rw!("comm-add"; "(+ ?a ?b)" => "(+ ?b ?a)"),
-                rw!("assoc-add"; "(+ ?a (+ ?b ?c))" => "(+ (+ ?a ?b) ?c)"),
-            ]
-        }
-    }
-
-    impl Bench for AC {
-        fn name(&self) -> String {
-            self.name.clone()
-        }
-
-        fn run_egg(&self) {
-            let num_iter = 10;
-            let runner = default_runner()
-                .with_iter_limit(num_iter)
-                .with_scheduler(SimpleScheduler)
-                .with_node_limit(usize::MAX)
-                .with_time_limit(time::Duration::MAX);
-            let runner = run_and_check(
-                "(+ 1 (+ 2 (+ 3 (+ 4 (+ 5 (+ 6 (+ 7 (+ 8 (+ 9 10)))))))))",
-                "(+ 10 (+ 9 (+ 8 (+ 7 (+ 6 (+ 5 (+ 4 (+ 3 (+ 2 1)))))))))",
-                runner,
-                self.rewrites(),
-                false,
-            );
-            assert_eq!(runner.iterations.len(), num_iter);
-        }
-    }
-}
 
 pub mod math_egg_src {
     use egg::{rewrite as rw, *};
     use num_rational::Rational64;
-    use num_traits::{One, Zero};
+    use num_traits::Zero;
 
     pub type EGraph = egg::EGraph<Math, ConstantFold>;
     pub type Rewrite = egg::Rewrite<Math, ConstantFold>;
@@ -326,16 +217,113 @@ pub mod math_egg_src {
     }
 }
 
+/*
+
+use egg::rewrite as rw;
+
+fn run_and_check<L: Language + FromOp + 'static, N: Analysis<L>>(
+    start_expr: &str,
+    end_expr: &str,
+    mut runner: Runner<L, N>,
+    rules: Vec<Rewrite<L, N>>,
+    early_check: bool,
+) -> Runner<L, N> {
+    let start_expr: RecExpr<L> = start_expr.parse().unwrap();
+    let s = start_expr.clone();
+
+    let end_expr: RecExpr<L> = end_expr.parse().unwrap();
+    let e = end_expr.clone();
+
+    if early_check {
+        runner = runner.with_hook(move |r| {
+            let egraph = &r.egraph;
+            if egraph.lookup_expr(&start_expr) == egraph.lookup_expr(&end_expr) {
+                Err("Proved all goals".into())
+            } else {
+                Ok(())
+            }
+        });
+    }
+    let runner = runner.with_expr(&s).run(&rules);
+
+    let report = runner.report();
+    log::info!("===== egg =====");
+    log::info!("{}", report);
+
+    let egraph = &runner.egraph;
+    assert!(egraph.lookup_expr(&s) == egraph.lookup_expr(&e));
+
+    runner
+}
+
+pub mod ac {
+    use super::*;
+    use num_rational::Rational64;
+    pub type Constant = Rational64;
+
+    define_language! {
+        pub enum Math {
+            "+" = Add([Id; 2]),
+            Constant(Constant),
+        }
+    }
+    // type EGraph = egg::EGraph<Math, ()>;
+    type Rewrite = egg::Rewrite<Math, ()>;
+
+    #[derive(Default)]
+    pub struct AC {
+        name: String,
+    }
+
+    pub(crate) fn new() -> impl Benchmark {
+        AC {
+            name: "math_ac_10".into(),
+        }
+    }
+
+    impl AC {
+        fn rewrites(&self) -> Vec<Rewrite> {
+            vec![
+                rw!("comm-add"; "(+ ?a ?b)" => "(+ ?b ?a)"),
+                rw!("assoc-add"; "(+ ?a (+ ?b ?c))" => "(+ (+ ?a ?b) ?c)"),
+            ]
+        }
+    }
+
+    impl Benchmark for AC {
+        fn name(&self) -> String {
+            self.name.clone()
+        }
+
+        fn run_egg(&self) {
+            let num_iter = 10;
+            let runner = default_runner()
+                .with_iter_limit(num_iter)
+                .with_scheduler(SimpleScheduler)
+                .with_node_limit(usize::MAX)
+                .with_time_limit(time::Duration::MAX);
+            let runner = run_and_check(
+                "(+ 1 (+ 2 (+ 3 (+ 4 (+ 5 (+ 6 (+ 7 (+ 8 (+ 9 10)))))))))",
+                "(+ 10 (+ 9 (+ 8 (+ 7 (+ 6 (+ 5 (+ 4 (+ 3 (+ 2 1)))))))))",
+                runner,
+                self.rewrites(),
+                false,
+            );
+            assert_eq!(runner.iterations.len(), num_iter);
+        }
+    }
+}
+
 pub mod simplify_root {
     use super::math_egg_src::*;
     use super::*;
 
-    pub(crate) fn new() -> impl Bench {
+    pub(crate) fn new() -> impl Benchmark {
         SimplifyRoot {}
     }
     pub struct SimplifyRoot {}
 
-    impl Bench for SimplifyRoot {
+    impl Benchmark for SimplifyRoot {
         fn name(&self) -> String {
             "math_simplify_root".into()
         }
@@ -379,12 +367,12 @@ pub mod simplify_factor {
     use super::math_egg_src::*;
     use super::*;
 
-    pub(crate) fn new() -> impl Bench {
+    pub(crate) fn new() -> impl Benchmark {
         SimplifyFactor {}
     }
     pub struct SimplifyFactor {}
 
-    impl Bench for SimplifyFactor {
+    impl Benchmark for SimplifyFactor {
         fn name(&self) -> String {
             "math_simplify_factor".into()
         }
@@ -413,23 +401,24 @@ pub mod simplify_factor {
     }
 }
 
+*/
 pub mod run_n {
     use super::math_egg_src::*;
     use super::*;
 
-    pub(crate) fn new(n: usize) -> impl Bench {
-        RunN { n }
+    pub(crate) fn new(n: usize) -> Box<dyn Benchmark> {
+        Box::new(RunN { n })
     }
     pub struct RunN {
         n: usize,
     }
 
-    impl Bench for RunN {
+    impl Benchmark for RunN {
         fn name(&self) -> String {
             format!("math-run-{}", self.n)
         }
 
-        fn run_egg(&self) {
+        fn run_egg(&self) -> usize {
             let start_exprs = vec![
                 "(i (ln x) x)",
                 "(i (+ x (cos x)) x)",
@@ -455,6 +444,7 @@ pub mod run_n {
             let report = runner.report();
             log::info!("===== egg =====");
             log::info!("{}", report);
+            report.egraph_nodes
         }
 
         fn egglog_text(&self) -> Option<String> {
@@ -476,16 +466,29 @@ pub mod run_n {
                                                 (Sqrt (Var "five")))
                                             (Const (rational 2 1)))))
             (run {})
+            (print-size Diff)
+            (print-size Integral)
+            (print-size Add)
+            (print-size Sub)
+            (print-size Mul)
+            (print-size Div)
+            (print-size Pow)
+            (print-size Ln)
+            (print-size Sqrt)
+            (print-size Sin)
+            (print-size Cos)
+            (print-size Const)
+            (print-size Var)
             "#,
             self.n
             ));
             Some(src)
         }
 
-        fn run_egglog(&self) {
+        fn run_egglog(&self) -> usize {
             let mut egraph = egg_smol::EGraph::default();
             egraph.match_limit = 1000;
-            self.run_egglog_with_engine(egraph);
+            self.run_egglog_with_engine(egraph)
         }
     }
 }

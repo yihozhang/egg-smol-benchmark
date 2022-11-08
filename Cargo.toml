@@ -6,10 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# egg = { path = "../egg/" }
-egg = { git = "https://github.com/egraphs-good/egg" }
-# egg = { git = "https://github.com/egraphs-good/egg", rev = "af69de311216cd" }
-# egg-smol = { git = "https://github.com/mwillsey/egg-smol", branch = "timestamps" }
+egg = { path = "../egg/" }
+# egg = { git = "https://github.com/yihozhang/egg", branch = "backoff-no-ff" }
+# egg-smol = { git = "https://github.com/mwillsey/egg-smol", branch = "main" }
 egg-smol = { path = "../egg-smol/" }
 num-bigint = "0.4.3"
 num-integer = "0.1.45"
@@ -20,3 +19,4 @@ env_logger = "0.9"
 structopt = { version = "0.3", default-features = false }
 csv = "1.1"
 serde = { version = "1", features = ["derive"] }
+regex = "1"
