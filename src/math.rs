@@ -490,5 +490,11 @@ pub mod run_n {
             egraph.match_limit = 1000;
             self.run_egglog_with_engine(egraph)
         }
+        fn run_egglognaive(&self) -> usize {
+            let mut egraph = egg_smol::EGraph::default();
+            egraph.match_limit = 1000;
+            egraph.seminaive = false;
+            self.run_egglog_with_engine(egraph)
+        }
     }
 }
