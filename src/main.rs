@@ -48,9 +48,7 @@ pub fn get_text(name: &str) -> Option<String> {
 trait Benchmark {
     fn name(&self) -> String;
     fn run_egg(&self) -> usize;
-    fn egglog_text(&self) -> Option<String> {
-        get_text(&self.name())
-    }
+    fn egglog_text(&self) -> Option<String>;
     fn run_egglog_with_engine(&self, mut egraph: egg_smol::EGraph) -> usize {
         let msgs = egraph
             .parse_and_run_program(&self.egglog_text().unwrap())
@@ -61,10 +59,9 @@ trait Benchmark {
         let re = regex::Regex::new("has size ([0-9]+)").unwrap();
         for msg in msgs.iter().rev() {
             if msg.starts_with("Ran ") {
+                // we only take the last report
                 if report.is_none() {
                     report = Some(msg);
-                } else {
-                    log::error!("multiple egglog performance report for {}", self.name());
                 }
             }
             if msg.starts_with("Function ") {
@@ -79,16 +76,9 @@ trait Benchmark {
         }
         db_size
     }
-    fn run_egglog(&self) -> usize {
-        let egraph = egg_smol::EGraph::default();
-        self.run_egglog_with_engine(egraph)
-    }
+    fn run_egglog(&mut self) -> usize;
 
-    fn run_egglognaive(&self) -> usize {
-        let mut egraph = egg_smol::EGraph::default();
-        egraph.seminaive = false;
-        self.run_egglog_with_engine(egraph)
-    }
+    fn run_egglognaive(&mut self) -> usize;
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -109,21 +99,22 @@ struct BenchmarkRecord {
 
 mod lambda;
 mod math;
+mod math_seminaive;
 
 #[derive(Default)]
 struct BenchmarkRunner;
 
 impl BenchmarkRunner {
-    pub fn run(&self, benches: &Vec<Box<dyn Benchmark>>) -> Vec<BenchmarkRecord> {
+    pub fn run(&self, benches: Vec<Box<dyn Benchmark>>) -> Vec<BenchmarkRecord> {
         let mut records = vec![];
-        for bench in benches {
-            let r = self.run_one(bench);
+        for mut bench in benches {
+            let r = self.run_one(&mut bench);
             records.extend(r.into_iter());
         }
         records
     }
 
-    pub fn run_one(&self, bench: &Box<dyn Benchmark>) -> Vec<BenchmarkRecord> {
+    pub fn run_one(&self, bench: &mut Box<dyn Benchmark>) -> Vec<BenchmarkRecord> {
         let opt = Opt::from_args();
         let mut egg_duration = None;
         let mut egglog_duration = None;
@@ -184,13 +175,22 @@ impl BenchmarkRunner {
         }
 
         if !opt.disable_egg && !opt.disable_egglog {
-            println!(
+            eprintln!(
                 "On benchmark {:?}, egglog spent {:.3}s, egglog-naive spent {:.3}s and egg spent {:.3}s, egglog/egg: {:?}",
                 bench.name(),
                 egglog_duration.unwrap().as_secs_f64(),
                 egglognaive_duration.unwrap().as_secs_f64(),
                 egg_duration.unwrap().as_secs_f64(),
                 egglog_duration.unwrap().as_secs_f64() / egg_duration.unwrap().as_secs_f64()
+            );
+        }
+
+        if opt.disable_egg && !opt.disable_egglog {
+            eprintln!(
+                "On benchmark {:?}, egglog spent {:.3}s and egglog-naive spent {:.3}s",
+                bench.name(),
+                egglog_duration.unwrap().as_secs_f64(),
+                egglognaive_duration.unwrap().as_secs_f64()
             );
         }
 
@@ -213,9 +213,12 @@ fn main() {
     env_logger::init();
     let mut benches = vec![];
     for i in 1..opt.iter_size + 1 {
+        // for i in opt.iter_size..opt.iter_size + 1 {
+        // benches.push(lambda::run_n::new(i));
         benches.push(math::run_n::new(i));
+        // benches.push(math_seminaive::run_n::new(i));
     }
-    let records = BenchmarkRunner::default().run(&benches);
+    let records = BenchmarkRunner::default().run(benches);
     let mut wtr = WriterBuilder::new().has_headers(false).from_writer(vec![]);
     for record in records {
         wtr.serialize(record).unwrap();
