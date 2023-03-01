@@ -6,9 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-egg = { path = "../egg/" }
-# egg = { git = "https://github.com/yihozhang/egg", branch = "backoff-no-ff" }
-# egg-smol = { git = "https://github.com/mwillsey/egg-smol", branch = "main" }
+egg = "0.9.3"
 egg-smol = { path = "../egg-smol/" }
 num-bigint = "0.4.3"
 num-integer = "0.1.45"

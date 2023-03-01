@@ -14,11 +14,6 @@ pub fn default_runner<L: Language, N: Analysis<L> + Default>() -> Runner<L, N> {
         .with_iter_limit(usize::MAX)
         .with_time_limit(time::Duration::from_secs(u64::MAX));
     runner = runner.with_scheduler(egg::SimpleScheduler);
-    // if opt.egg_uses_backoff_scheduler {
-    //     runner = runner.with_scheduler(egg::BackoffScheduler::default());
-    // } else {
-    //     runner = runner.with_scheduler(egg::SimpleScheduler);
-    // }
     runner
 }
 
@@ -29,10 +24,10 @@ pub(crate) struct Opt {
     disable_egg: bool,
     #[structopt(long)]
     disable_egglog: bool,
-    // repeat should be odd
+    // repeat should be an odd number
     #[structopt(long, default_value = "3")]
     repeat: usize,
-    #[structopt(long, default_value = "100")]
+    #[structopt(long, default_value = "200")]
     iter_size: usize,
 }
 
@@ -97,19 +92,25 @@ struct BenchmarkRecord {
     size: usize,
 }
 
-mod lambda;
 mod math;
-mod math_seminaive;
-
 #[derive(Default)]
 struct BenchmarkRunner;
 
 impl BenchmarkRunner {
     pub fn run(&self, benches: Vec<Box<dyn Benchmark>>) -> Vec<BenchmarkRecord> {
         let mut records = vec![];
-        for mut bench in benches {
+        for (i, mut bench) in benches.into_iter().enumerate() {
             let r = self.run_one(&mut bench);
             records.extend(r.into_iter());
+
+            if i % 5 == 0 {
+                let mut wtr = WriterBuilder::new().has_headers(false).from_writer(vec![]);
+                for record in records.iter() {
+                    wtr.serialize(record).unwrap();
+                }
+                let data = String::from_utf8(wtr.into_inner().unwrap()).unwrap();
+                fs::write("benchmarks.csv", data).unwrap();
+            }
         }
         records
     }
@@ -197,16 +198,6 @@ impl BenchmarkRunner {
         records
     }
 }
-// fn benches() -> Vec<Box<dyn Benchmark>> {
-//     vec![
-//         // Box::new(math::ac::new()),
-//         // Box::new(math::simplify_root::new()),
-//         // Box::new(math::simplify_factor::new()),
-//         Box::new(math::run_n::new(100)),
-//         // Lambda is broken right now
-//         // Box::new(lambda::run_n::new(15)),
-//     ]
-// }
 
 fn main() {
     let opt = Opt::from_args();
@@ -214,9 +205,7 @@ fn main() {
     let mut benches = vec![];
     for i in 1..opt.iter_size + 1 {
         // for i in opt.iter_size..opt.iter_size + 1 {
-        // benches.push(lambda::run_n::new(i));
         benches.push(math::run_n::new(i));
-        // benches.push(math_seminaive::run_n::new(i));
     }
     let records = BenchmarkRunner::default().run(benches);
     let mut wtr = WriterBuilder::new().has_headers(false).from_writer(vec![]);
